@@ -151,8 +151,31 @@ class Lexer:
             while self.peek().isdigit():
                 self.next_char()
 
-        token_text = self.source[start_pos : self.cur_pos + 1]
+        self.next_char()
+
+        token_text = self.source[start_pos : self.cur_pos]
         return Token(token_text, TokenType.NUMBER)
+
+    # Parses an identifier.
+    # First digit should not be consumed.
+    def identifier(self) -> Token:
+        start_pos = self.cur_pos
+
+        while self.peek().isalnum():
+            self.next_char()
+
+        self.next_char()
+
+        token_text = self.source[start_pos : self.cur_pos]
+        return Token(token_text, self.check_if_keyword(token_text))
+
+    # Checks if a string is a keyword, returns the corresponding token type.
+    def check_if_keyword(self, txt: str):
+        # Uses a trick.
+        for kind in TokenType:
+            if kind.name == txt and kind.value >= 100 and kind.value < 200:
+                return kind
+        return TokenType.IDENT
 
     # Returns the next token.
     def get_token(self) -> Token:
@@ -194,6 +217,8 @@ class Lexer:
         elif self.match('"'):
             return self.string()
         elif self.cur_char.isdigit():
-            return self.number()            
+            return self.number()        
+        elif self.cur_char.isalpha():
+            return self.identifier()    
         else:
             self.abort("Unknown character: '" + self.cur_char + "'")

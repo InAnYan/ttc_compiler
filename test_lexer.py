@@ -72,10 +72,30 @@ class TestLexer(unittest.TestCase):
         self.assertEqual(res[0].kind, TokenType.PLUS)
         self.assertEqual(res[1].kind, TokenType.MINUS)
         self.assertEqual(res[2].kind, TokenType.NUMBER)
+        self.assertEqual(res[2].text, "123")
         self.assertEqual(res[3].kind, TokenType.NUMBER)
+        self.assertEqual(res[3].text, "9.8654")
         self.assertEqual(res[4].kind, TokenType.ASTERISK)
         self.assertEqual(res[5].kind, TokenType.SLASH)
         self.assertEqual(res[6].kind, TokenType.NEWLINE)
+
+    def test_number_dot_error(self):
+        self.assertRaises(LexerError, self.process_input, "12.")
+
+    def check_identifiers(self):
+        res = self.process_input("IF+-123 foo*THEN/")
+        self.assertEqual(len(res), 9)
+        self.assertEqual(res[0].kind, TokenType.IF)
+        self.assertEqual(res[1].kind, TokenType.PLUS)
+        self.assertEqual(res[2].kind, TokenType.MINUS)
+        self.assertEqual(res[3].kind, TokenType.NUMBER)
+        self.assertEqual(res[4].text, "123")
+        self.assertEqual(res[4].kind, TokenType.IDENT)
+        self.assertEqual(res[4].text, "foo")
+        self.assertEqual(res[5].kind, TokenType.ASTERISK)
+        self.assertEqual(res[6].kind, TokenType.THEN)
+        self.assertEqual(res[7].kind, TokenType.SLASH)
+        self.assertEqual(res[8].kind, TokenType.NEWLINE)
 
 
 if __name__ == '__main__':
