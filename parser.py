@@ -16,12 +16,19 @@ class Parser:
     lexer: Lexer
     cur_token: Token
     peek_token: Token
+    symbols: set
+    labels_declared: set
+    labels_gotoed: set
 
     def __init__(self, lexer: Lexer):
         self.lexer = lexer
 
         self.cur_token = None
         self.peek_token = None
+
+        self.symbols = set()
+        self.labels_declared = set()
+        self.labels_gotoed = set()
 
         self.advance()
         self.advance()
@@ -32,8 +39,15 @@ class Parser:
     def program(self):
         print("PROGRAM")
 
+        while self.check_cur(TokenType.NEWLINE):
+            self.advance()
+
         while not self.check_cur(TokenType.EOF):
             self.statement()
+
+        for label in self.labels_gotoed:
+            if label not in self.labels_declared:
+                self.abort("attemp to GOTO to an undeclared label: '" + label + "'")
 
     # One of the following statements...
     def statement(self):
@@ -45,6 +59,7 @@ class Parser:
                 self.advance()
             else:
                 self.expression()
+
         elif self.check_cur(TokenType.IF):
             print('STATEMENT-IF')
             self.advance()
@@ -57,6 +72,7 @@ class Parser:
                 self.statement()
             
             self.require(TokenType.ENDIF)
+
         elif self.check_cur(TokenType.WHILE):
             print('STATEMENT-WHILE')
             self.advance()
@@ -69,24 +85,44 @@ class Parser:
                 self.statement()
             
             self.require(TokenType.ENDWHILE)
+
         elif self.check_cur(TokenType.LABEL):
             print('STATEMENT-LABEL')
             self.advance()
+
+            if self.cur_token.text in self.labels_declared:
+                self.abort("label already exists: '" + self.cur_token.text + "'")
+            
+            self.labels_declared.add(self.cur_token.text)
+
             self.require(TokenType.IDENT)
+
         elif self.check_cur(TokenType.GOTO):
             print('STATEMENT-GOTO')
             self.advance()
+            self.labels_gotoed.add(self.cur_token.text)
             self.require(TokenType.IDENT)
+
         elif self.check_cur(TokenType.LET):
             print('STATEMENT-LET')
             self.advance()
+
+            if self.cur_token.text not in self.symbols:
+                self.symbols.add(self.cur_token.text)
+
             self.require(TokenType.IDENT)
             self.require(TokenType.EQ)
             self.expression()
+
         elif self.check_cur(TokenType.INPUT):
             print('STATEMENT-INPUT')
             self.advance()
-            self.require(TokenType.INPUT)
+
+            if self.cur_token.text not in self.symbols:
+                self.symbols.add(self.cur_token.text)
+
+            self.require(TokenType.IDENT)
+
         else:
             self.abort('unexpected ' + self.cur_token.kind.name)
         
@@ -99,7 +135,71 @@ class Parser:
         while self.check_cur(TokenType.NEWLINE):
             self.advance()
 
+    # comparison ::= expression ((...) expression)+
+    def comparison(self):
+        print('COMPARISON')
+        
+        self.expression()
+
+        if self.is_cur_tok_comparison():
+            self.advance()
+            self.expression()
+        else:
+            self.abort('expected comparison operator')
+        
+        while self.is_cur_tok_comparison():
+            self.advance()
+            self.expression()
+
+    # Expressions' productions:
+    
+    def expression(self):
+        print('EXPRESSION')
+
+        self.term()
+
+        while self.check_cur(TokenType.PLUS) or self.check_cur(TokenType.MINUS):
+            self.advance()
+            self.term()
+
+    def term(self):
+        print('TERM')
+
+        self.unary()
+        
+        while self.check_cur(TokenType.ASTERISK) or self.check_cur(TokenType.SLASH):
+            self.advance()
+            self.unary()
+
+    def unary(self):
+        print('UNARY')
+
+        if self.check_cur(TokenType.PLUS) or self.check_cur(TokenType.MINUS):
+            self.advance()
+        self.primary()
+
+    def primary(self):
+        print('PRIMARY (' + self.cur_token.text + ')')
+
+        if self.check_cur(TokenType.NUMBER):
+            self.advance()
+        elif self.check_cur(TokenType.IDENT):
+            if self.cur_token.text not in self.symbols:
+                self.abort("undefined reference to '" + self.cur_token.text + "'")
+            self.advance()
+        else:
+            self.abort("unexpected token")
+
     # Helpers functions:
+
+    # Checks if the current token is a comparison operator
+    def is_cur_tok_comparison(self):
+        return self.check_cur(TokenType.GT) \
+            or self.check_cur(TokenType.GTEQ) \
+            or self.check_cur(TokenType.LT) \
+            or self.check_cur(TokenType.LTEQ) \
+            or self.check_cur(TokenType.EQEQ) \
+            or self.check_cur(TokenType.NOTEQ)
 
     # Ends parser execution.
     def abort(self, message):
