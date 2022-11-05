@@ -1,4 +1,5 @@
 from lexer import *
+from emmiter import *
 
 class ParserError(Exception):
 
@@ -14,14 +15,16 @@ class ParserError(Exception):
 class Parser:
 
     lexer: Lexer
+    emitter: Emitter
     cur_token: Token
     peek_token: Token
     symbols: set
     labels_declared: set
     labels_gotoed: set
 
-    def __init__(self, lexer: Lexer):
+    def __init__(self, lexer: Lexer, emitter: Emitter):
         self.lexer = lexer
+        self.emitter = emitter
 
         self.cur_token = None
         self.peek_token = None
@@ -37,7 +40,8 @@ class Parser:
 
     # program ::= statement*
     def program(self):
-        print("PROGRAM")
+        self.emitter.header_line("#include <stdio.h>")
+        self.emitter.header_line("int main(void){")
 
         while self.check_cur(TokenType.NEWLINE):
             self.advance()
@@ -49,45 +53,53 @@ class Parser:
             if label not in self.labels_declared:
                 self.abort("attemp to GOTO to an undeclared label: '" + label + "'")
 
+        self.emitter.emit_line("return 0;")
+        self.emitter.emit_line("}")
+
     # One of the following statements...
     def statement(self):
         if self.check_cur(TokenType.PRINT):
-            print('STATEMENT-PRINT')
             self.advance()
 
             if self.check_cur(TokenType.STRING):
+                self.emitter.emit_line('printf("' + self.cur_token.text + '\\n");')
                 self.advance()
             else:
+                self.emitter.emit('printf("%.2f\\n", (float)(')
                 self.expression()
+                self.emitter.emit_line('));')
 
         elif self.check_cur(TokenType.IF):
-            print('STATEMENT-IF')
             self.advance()
+            self.emitter.emit('if(')
             self.comparison()
 
             self.require(TokenType.THEN)
             self.nl()
+            self.emitter.emit_line('){')
 
             while not self.check_cur(TokenType.ENDIF):
                 self.statement()
             
             self.require(TokenType.ENDIF)
+            self.emitter.emit_line('}')
 
         elif self.check_cur(TokenType.WHILE):
-            print('STATEMENT-WHILE')
             self.advance()
+            self.emitter.emit('while(')
             self.comparison()
 
             self.require(TokenType.REPEAT)
             self.nl()
+            self.emitter.emit_line('){')
 
             while not self.check_cur(TokenType.ENDWHILE):
                 self.statement()
             
             self.require(TokenType.ENDWHILE)
+            self.emitter.emit_line('}')
 
         elif self.check_cur(TokenType.LABEL):
-            print('STATEMENT-LABEL')
             self.advance()
 
             if self.cur_token.text in self.labels_declared:
@@ -95,32 +107,40 @@ class Parser:
             
             self.labels_declared.add(self.cur_token.text)
 
+            self.emitter.emit_line(self.cur_token.text + ':')
             self.require(TokenType.IDENT)
 
         elif self.check_cur(TokenType.GOTO):
-            print('STATEMENT-GOTO')
             self.advance()
             self.labels_gotoed.add(self.cur_token.text)
+            self.emitter.emit_line("goto " + self.cur_token.text + ";")
             self.require(TokenType.IDENT)
 
         elif self.check_cur(TokenType.LET):
-            print('STATEMENT-LET')
             self.advance()
 
             if self.cur_token.text not in self.symbols:
                 self.symbols.add(self.cur_token.text)
+                self.emitter.header_line("float " + self.cur_token.text + ";")
 
+            self.emitter.emit(self.cur_token.text + " = ")
             self.require(TokenType.IDENT)
             self.require(TokenType.EQ)
+            
             self.expression()
+            self.emitter.emit_line(";")
 
         elif self.check_cur(TokenType.INPUT):
-            print('STATEMENT-INPUT')
             self.advance()
 
             if self.cur_token.text not in self.symbols:
                 self.symbols.add(self.cur_token.text)
+                self.emitter.header_line("float " + self.cur_token.text + ";")
 
+            self.emitter.emit_line('if(0 == scanf("%f", &' + self.cur_token.text + ")){")
+            self.emitter.emit_line(self.cur_token.text + " = 0;")
+            self.emitter.emit('scanf("%*s");')
+            self.emitter.emit_line("}")
             self.require(TokenType.IDENT)
 
         else:
@@ -130,62 +150,61 @@ class Parser:
 
     # nl ::= '\n'+
     def nl(self):
-        print('NEWLINE')
         self.require(TokenType.NEWLINE)
         while self.check_cur(TokenType.NEWLINE):
             self.advance()
 
     # comparison ::= expression ((...) expression)+
     def comparison(self):
-        print('COMPARISON')
-        
         self.expression()
 
         if self.is_cur_tok_comparison():
+            self.emitter.emit(self.cur_token.text)
             self.advance()
             self.expression()
         else:
             self.abort('expected comparison operator')
         
         while self.is_cur_tok_comparison():
+            self.emitter.emit(self.cur_token.text)
             self.advance()
             self.expression()
 
     # Expressions' productions:
     
     def expression(self):
-        print('EXPRESSION')
-
         self.term()
 
         while self.check_cur(TokenType.PLUS) or self.check_cur(TokenType.MINUS):
+            self.emitter.emit(self.cur_token.text)
             self.advance()
             self.term()
 
     def term(self):
-        print('TERM')
-
         self.unary()
         
         while self.check_cur(TokenType.ASTERISK) or self.check_cur(TokenType.SLASH):
+            self.emitter.emit(self.cur_token.text)
             self.advance()
             self.unary()
 
     def unary(self):
-        print('UNARY')
-
         if self.check_cur(TokenType.PLUS) or self.check_cur(TokenType.MINUS):
+            self.emitter.emit(self.cur_token.text)
             self.advance()
-        self.primary()
+            self.unary()
+        else:
+            self.primary()
 
     def primary(self):
-        print('PRIMARY (' + self.cur_token.text + ')')
-
         if self.check_cur(TokenType.NUMBER):
+            self.emitter.emit(self.cur_token.text)
             self.advance()
         elif self.check_cur(TokenType.IDENT):
             if self.cur_token.text not in self.symbols:
                 self.abort("undefined reference to '" + self.cur_token.text + "'")
+            
+            self.emitter.emit(self.cur_token.text)
             self.advance()
         else:
             self.abort("unexpected token")

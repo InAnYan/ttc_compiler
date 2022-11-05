@@ -111,7 +111,7 @@ class Lexer:
 
     # Return the previous character.
     def previous(self) -> str:
-        if self.cur_pos >= 1 and self.cur_pos - 2 > len(self.source):
+        if self.cur_pos >= 1 and self.cur_pos < len(self.source):
             return self.source[self.cur_pos - 1]
         else:
             return '\0'

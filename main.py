@@ -1,5 +1,6 @@
 from lexer import *
 from parser import *
+from emmiter import *
 import sys
 
 def main():
@@ -13,10 +14,12 @@ def main():
     
     try:
         lexer = Lexer(input)
-        parser = Parser(lexer)
+        emitter = Emitter("out.c" if len(sys.argv) < 3 else sys.argv[2])
+        parser = Parser(lexer, emitter)
 
         parser.program()
-        print("Parsing completed.")
+        emitter.write_file()
+        print("Compiling completed.")
     except LexerError as e:
         report_error(e.message, e.position)
     except ParserError as e:
