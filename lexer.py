@@ -38,10 +38,12 @@ class TokenType(enum.Enum):
 class Token:
     text: str
     kind: TokenType
+    position: int
 
-    def __init__(self, text: str, kind: TokenType):
+    def __init__(self, text: str, kind: TokenType, position: int):
         self.text = text
         self.kind = kind
+        self.position = position
 
 
 class LexerError(Exception):
@@ -92,6 +94,7 @@ class Lexer:
         else:
             return False
 
+    # Ends lexer execution.
     def abort(self, message: str):
         raise LexerError(message, self.cur_pos)
 
@@ -108,14 +111,15 @@ class Lexer:
 
     # Return the previous character.
     def previous(self) -> str:
-        if self.cur_pos >= 1 and self.cur_pos != len(self.source) + 1:
+        if self.cur_pos >= 1 and self.cur_pos - 2 > len(self.source):
             return self.source[self.cur_pos - 1]
         else:
             return '\0'
 
     # Creates a token based on previous character.
     def char_token(self, kind: TokenType) -> Token:
-        return Token(self.previous(), kind)
+        # TODO: Test pos
+        return Token(self.previous(), kind, self.cur_pos - 1)
 
     # Parses a string.
     def string(self) -> Token:
@@ -125,14 +129,15 @@ class Lexer:
             if self.cur_char == '\r' or self.cur_char == '\n' \
             or self.cur_char == '\t' or self.cur_char == '\\' \
             or self.cur_char == '%':
-                self.abort("Illegal character in string: '" + self.cur_char + "'")
+                self.abort("illegal character in string: '" + self.cur_char + "'")
                 
             self.next_char()
             
         self.next_char()
 
         token_text = self.source[start_pos: self.cur_pos - 1]
-        return Token(token_text, TokenType.STRING)
+        # TODO: Test start_pos
+        return Token(token_text, TokenType.STRING, start_pos - 1)
 
     # Parses a number. 
     # First digit should not be consumed.
@@ -146,7 +151,7 @@ class Lexer:
             self.next_char()
 
             if not self.peek().isdigit():
-                self.abort("Expected a digit after '.'")
+                self.abort("expected a digit after '.'")
             
             while self.peek().isdigit():
                 self.next_char()
@@ -154,7 +159,8 @@ class Lexer:
         self.next_char()
 
         token_text = self.source[start_pos : self.cur_pos]
-        return Token(token_text, TokenType.NUMBER)
+        # TODO: Test start_pos
+        return Token(token_text, TokenType.NUMBER, start_pos)
 
     # Parses an identifier.
     # First digit should not be consumed.
@@ -167,7 +173,8 @@ class Lexer:
         self.next_char()
 
         token_text = self.source[start_pos : self.cur_pos]
-        return Token(token_text, self.check_if_keyword(token_text))
+        # TODO: Test start_pos
+        return Token(token_text, self.check_if_keyword(token_text), start_pos)
 
     # Checks if a string is a keyword, returns the corresponding token type.
     def check_if_keyword(self, txt: str):
@@ -213,7 +220,7 @@ class Lexer:
             if self.match('='):
                 return Token('!=', TokenType.NOTEQ)
             else:
-                self.abort("Expected '!=', got '!'")
+                self.abort("expected '!=', got '!'")
         elif self.match('"'):
             return self.string()
         elif self.cur_char.isdigit():
@@ -221,4 +228,4 @@ class Lexer:
         elif self.cur_char.isalpha():
             return self.identifier()    
         else:
-            self.abort("Unknown character: '" + self.cur_char + "'")
+            self.abort("unknown character: '" + self.cur_char + "'")
